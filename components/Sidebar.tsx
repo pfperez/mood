@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { Message } from './ChatBox'
 
 export interface Conversation {
@@ -32,6 +34,7 @@ export default function Sidebar({
   isOpen,
   onClose,
 }: SidebarProps) {
+  const pathname = usePathname()
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 
   // Close the dropdown when clicking anywhere outside it
@@ -157,6 +160,35 @@ export default function Sidebar({
             </div>
           ))}
         </nav>
+
+        {/* Insights navigation */}
+        <div className="shrink-0 border-t border-purple-200 p-2">
+          <Link
+            href="/insights"
+            className={[
+              'flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors',
+              pathname === '/insights'
+                ? 'bg-purple-200 text-purple-900'
+                : 'text-purple-800 hover:bg-purple-200/60',
+            ].join(' ')}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-4 h-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+            Insights
+          </Link>
+        </div>
       </aside>
     </>
   )
