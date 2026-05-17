@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCompanionResponse } from '@/lib/groq'
+import { generateSpeech } from '@/lib/replicate'
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,7 +15,9 @@ export async function POST(req: NextRequest) {
       history ?? []
     )
 
-    return NextResponse.json({ response, sentiment, intensity })
+    const audioUrl = await generateSpeech(response)
+
+    return NextResponse.json({ response, sentiment, intensity, audioUrl })
   } catch (err) {
     console.error('Chat API error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

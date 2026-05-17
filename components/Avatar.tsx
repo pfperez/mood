@@ -16,9 +16,10 @@ function amplitudeToMouth(amp: number): MouthState {
 
 interface AvatarProps {
   isPlaying: boolean
+  analyserRef: React.RefObject<AnalyserNode | null>
 }
 
-export default function Avatar({ isPlaying }: AvatarProps) {
+export default function Avatar({ isPlaying, analyserRef }: AvatarProps) {
   const [mouthState, setMouthState] = useState<MouthState>('closed')
   const rafRef = useRef<number>(0)
 
@@ -29,19 +30,20 @@ export default function Avatar({ isPlaying }: AvatarProps) {
       return
     }
 
-    // Drive mouth animation with a sine wave — the Web Speech API doesn't expose
-    // an audio stream, so we simulate natural-looking movement with smooth oscillation
-    let t = 0
+    const analyser = analyserRef.current
+    if (!analyser) return
+
+    const data = new Uint8Array(analyser.frequencyBinCount)
     const tick = () => {
-      t += 0.1
-      const amp = (Math.sin(t) + 1) / 2  // oscillates 0→1→0 smoothly
-      setMouthState(amplitudeToMouth(amp))
+      analyser.getByteFrequencyData(data)
+      const avg = data.reduce((a, b) => a + b, 0) / data.length / 255
+      setMouthState(amplitudeToMouth(avg))
       rafRef.current = requestAnimationFrame(tick)
     }
     rafRef.current = requestAnimationFrame(tick)
 
     return () => cancelAnimationFrame(rafRef.current)
-  }, [isPlaying])
+  }, [isPlaying, analyserRef])
 
   return (
     <div className="flex items-center justify-center">

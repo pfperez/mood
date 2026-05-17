@@ -12,25 +12,6 @@ const INTRO_MESSAGE: Message = {
   content: "Hi, I'm here. How are you feeling today?",
 }
 
-function pickFemaleVoice(): Promise<SpeechSynthesisVoice | null> {
-  return new Promise((resolve) => {
-    const pick = (voices: SpeechSynthesisVoice[]) => {
-      const en = voices.filter((v) => v.lang.startsWith('en'))
-      return (
-        en.find((v) => v.name === 'Samantha') ??
-        en.find((v) => /female/i.test(v.name)) ??
-        en.find((v) => v.name.includes('(f)') || v.name.includes('_f')) ??
-        en[0] ??
-        null
-      )
-    }
-    const voices = window.speechSynthesis.getVoices()
-    if (voices.length) return resolve(pick(voices))
-    window.speechSynthesis.onvoiceschanged = () =>
-      resolve(pick(window.speechSynthesis.getVoices()))
-  })
-}
-
 export default function Page() {
   const [messages, setMessages] = useState<Message[]>([])
   const [isThinking, setIsThinking] = useState(false)
@@ -38,8 +19,10 @@ export default function Page() {
   const [isNew, setIsNew] = useState(true)
   const [isMuted, setIsMuted] = useState(false)
 
-  const endTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isMutedRef = useRef(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
 
   // Hydrate from localStorage on mount
   useEffect(() => {
@@ -56,6 +39,30 @@ export default function Page() {
     const muted = localStorage.getItem(MUTED_KEY) === 'true'
     setIsMuted(muted)
     isMutedRef.current = muted
+  }, [])
+
+  // Set up the audio element and Web Audio AnalyserNode once
+  useEffect(() => {
+    const audio = new Audio()
+    audio.crossOrigin = 'anonymous'
+    audioRef.current = audio
+
+    const ctx = new AudioContext()
+    const analyser = ctx.createAnalyser()
+    analyser.fftSize = 256
+    ctx.createMediaElementSource(audio).connect(analyser)
+    analyser.connect(ctx.destination)
+    audioCtxRef.current = ctx
+    analyserRef.current = analyser
+
+    audio.onplay  = () => setIsPlaying(true)
+    audio.onended = () => setIsPlaying(false)
+    audio.onerror = () => setIsPlaying(false)
+
+    return () => {
+      audio.pause()
+      ctx.close()
+    }
   }, [])
 
   // Persist messages whenever they change (skip during intro state)
@@ -94,7 +101,6 @@ export default function Page() {
     async (text: string) => {
       const wasNew = isNew
 
-      // Build history for the API — if first message, include the intro as assistant context
       const historyBase: { role: 'user' | 'assistant'; content: string }[] = wasNew
         ? [{ role: 'assistant', content: INTRO_MESSAGE.content }]
         : []
@@ -103,7 +109,6 @@ export default function Page() {
         ...messages.map((m) => ({ role: m.role, content: m.content })),
       ]
 
-      // Commit intro to the real message list on first send
       setIsNew(false)
       setMessages((prev) => {
         const base = wasNew ? [INTRO_MESSAGE, ...prev] : prev
@@ -128,30 +133,10 @@ export default function Page() {
         ])
         playSound('/sounds/receive.mp3')
 
-        if (data.response && typeof window !== 'undefined') {
-          window.speechSynthesis.cancel()
-          if (endTimerRef.current) clearTimeout(endTimerRef.current)
-
-          const utterance = new SpeechSynthesisUtterance(data.response)
-          const voice = await pickFemaleVoice()
-          if (voice) utterance.voice = voice
-
-          const words = data.response.trim().split(/\s+/).length
-          const estimatedMs = Math.max(800, (words / 2.8) * 1000)
-
-          const onDone = () => {
-            if (endTimerRef.current) clearTimeout(endTimerRef.current)
-            setIsPlaying(false)
-          }
-
-          utterance.onstart = () => {
-            setIsPlaying(true)
-            endTimerRef.current = setTimeout(onDone, estimatedMs)
-          }
-          utterance.onend = onDone
-          utterance.onerror = onDone
-
-          window.speechSynthesis.speak(utterance)
+        if (data.audioUrl && audioRef.current) {
+          if (audioCtxRef.current?.state === 'suspended') audioCtxRef.current.resume()
+          audioRef.current.src = data.audioUrl
+          audioRef.current.play().catch(console.error)
         }
       } catch (err) {
         console.error(err)
@@ -210,7 +195,7 @@ export default function Page() {
           <p className="text-purple-300 text-sm mb-2">An AI companion that listens</p>
         )}
 
-        <Avatar isPlaying={isPlaying} />
+        <Avatar isPlaying={isPlaying} analyserRef={analyserRef} />
       </header>
 
       {/* Chat area fills remaining viewport */}
