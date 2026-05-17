@@ -103,7 +103,7 @@ export default function Page() {
       const history = [
         ...historyBase,
         ...messages.map((m) => ({ role: m.role, content: m.content })),
-      ]
+      ].slice(-20)
 
       setIsNew(false)
       setMessages((prev) => {
