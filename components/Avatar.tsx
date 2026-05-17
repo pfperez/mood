@@ -1,49 +1,50 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 
 type MouthState = 'closed' | 'small' | 'medium' | 'wide'
 
 const MOUTH_STATES: MouthState[] = ['closed', 'small', 'medium', 'wide']
 
-function amplitudeToMouth(amp: number): MouthState {
-  if (amp < 0.15) return 'closed'
-  if (amp < 0.4)  return 'small'
-  if (amp < 0.72) return 'medium'
-  return 'wide'
-}
 
 interface AvatarProps {
   isPlaying: boolean
-  analyserRef: React.RefObject<AnalyserNode | null>
 }
 
-export default function Avatar({ isPlaying, analyserRef }: AvatarProps) {
+const LIP_CYCLE: MouthState[] = [
+  'closed', 'small', 'medium', 'wide', 'medium', 'small',
+  'closed', 'small', 'medium', 'wide', 'medium', 'small',
+]
+
+export default function Avatar({ isPlaying }: AvatarProps) {
   const [mouthState, setMouthState] = useState<MouthState>('closed')
-  const rafRef = useRef<number>(0)
 
   useEffect(() => {
+    console.log('[Avatar] isPlaying:', isPlaying)
+
     if (!isPlaying) {
       setMouthState('closed')
-      cancelAnimationFrame(rafRef.current)
       return
     }
 
-    const analyser = analyserRef.current
-    if (!analyser) return
+    let idx = 0
+    let timerId: ReturnType<typeof setTimeout>
 
-    const data = new Uint8Array(analyser.frequencyBinCount)
-    const tick = () => {
-      analyser.getByteFrequencyData(data)
-      const avg = data.reduce((a, b) => a + b, 0) / data.length / 255
-      setMouthState(amplitudeToMouth(avg))
-      rafRef.current = requestAnimationFrame(tick)
+    const step = () => {
+      const next = LIP_CYCLE[idx % LIP_CYCLE.length]
+      console.log('[Avatar] simulated mouth:', next)
+      setMouthState(next)
+      idx++
+      timerId = setTimeout(step, 120 + Math.random() * 60)
     }
-    rafRef.current = requestAnimationFrame(tick)
+    timerId = setTimeout(step, 120 + Math.random() * 60)
 
-    return () => cancelAnimationFrame(rafRef.current)
-  }, [isPlaying, analyserRef])
+    return () => {
+      clearTimeout(timerId)
+      setMouthState('closed')
+    }
+  }, [isPlaying])
 
   return (
     <div className="flex items-center justify-center">

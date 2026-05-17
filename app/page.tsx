@@ -20,9 +20,6 @@ export default function Page() {
   const [isMuted, setIsMuted] = useState(false)
 
   const isMutedRef = useRef(false)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const audioCtxRef = useRef<AudioContext | null>(null)
-  const analyserRef = useRef<AnalyserNode | null>(null)
 
   // Hydrate from localStorage on mount
   useEffect(() => {
@@ -39,30 +36,6 @@ export default function Page() {
     const muted = localStorage.getItem(MUTED_KEY) === 'true'
     setIsMuted(muted)
     isMutedRef.current = muted
-  }, [])
-
-  // Set up the audio element and Web Audio AnalyserNode once
-  useEffect(() => {
-    const audio = new Audio()
-    audio.crossOrigin = 'anonymous'
-    audioRef.current = audio
-
-    const ctx = new AudioContext()
-    const analyser = ctx.createAnalyser()
-    analyser.fftSize = 256
-    ctx.createMediaElementSource(audio).connect(analyser)
-    analyser.connect(ctx.destination)
-    audioCtxRef.current = ctx
-    analyserRef.current = analyser
-
-    audio.onplay  = () => setIsPlaying(true)
-    audio.onended = () => setIsPlaying(false)
-    audio.onerror = () => setIsPlaying(false)
-
-    return () => {
-      audio.pause()
-      ctx.close()
-    }
   }, [])
 
   // Persist messages whenever they change (skip during intro state)
@@ -96,6 +69,29 @@ export default function Page() {
       setIsNew(true)
     }
   }
+
+  function pickFemaleVoice(): SpeechSynthesisVoice | null {
+    const voices = speechSynthesis.getVoices()
+    const preferred = ['Samantha', 'Victoria', 'Karen', 'Allison', 'Ava']
+    for (const name of preferred) {
+      const match = voices.find((v) => v.name.includes(name))
+      if (match) return match
+    }
+    return voices.find((v) => v.name.toLowerCase().includes('female')) ?? null
+  }
+
+  const speakResponse = useCallback((text: string) => {
+    speechSynthesis.cancel()
+    const utt = new SpeechSynthesisUtterance(text)
+    const voice = pickFemaleVoice()
+    if (voice) utt.voice = voice
+    utt.rate = 1.0
+    utt.pitch = 1.0
+    utt.onstart = () => setIsPlaying(true)
+    utt.onend = () => setIsPlaying(false)
+    utt.onerror = () => setIsPlaying(false)
+    speechSynthesis.speak(utt)
+  }, [])
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -133,11 +129,7 @@ export default function Page() {
         ])
         playSound('/sounds/receive.mp3')
 
-        if (data.audioUrl && audioRef.current) {
-          if (audioCtxRef.current?.state === 'suspended') audioCtxRef.current.resume()
-          audioRef.current.src = data.audioUrl
-          audioRef.current.play().catch(console.error)
-        }
+        speakResponse(data.response)
       } catch (err) {
         console.error(err)
         setMessages((prev) => [
@@ -195,7 +187,7 @@ export default function Page() {
           <p className="text-purple-300 text-sm mb-2">An AI companion that listens</p>
         )}
 
-        <Avatar isPlaying={isPlaying} analyserRef={analyserRef} />
+        <Avatar isPlaying={isPlaying} />
       </header>
 
       {/* Chat area fills remaining viewport */}
