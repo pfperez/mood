@@ -49,7 +49,7 @@ export default function Avatar({ isPlaying }: AvatarProps) {
         All 4 images rendered and preloaded at once, stacked via absolute positioning.
         Only the active frame is visible — CSS opacity swap, no network fetch, no flicker.
       */}
-      <div className="relative w-[300px] h-[300px]">
+      <div className="relative w-[200px] h-[200px] md:w-[300px] md:h-[300px]">
         {MOUTH_STATES.map((state) => (
           <Image
             key={state}

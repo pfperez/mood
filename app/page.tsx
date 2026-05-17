@@ -1,18 +1,26 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import Avatar from '@/components/Avatar'
 import ChatBox, { Message } from '@/components/ChatBox'
+
+const STORAGE_KEY = 'mood-history'
+const MUTED_KEY = 'mood-muted'
+
+const INTRO_MESSAGE: Message = {
+  role: 'assistant',
+  content: "Hi, I'm here. How are you feeling today?",
+}
 
 function pickFemaleVoice(): Promise<SpeechSynthesisVoice | null> {
   return new Promise((resolve) => {
     const pick = (voices: SpeechSynthesisVoice[]) => {
       const en = voices.filter((v) => v.lang.startsWith('en'))
       return (
-        en.find((v) => v.name === 'Samantha') ??         // Mac/Safari (same as Siri)
-        en.find((v) => /female/i.test(v.name)) ??        // some Windows voices label this
+        en.find((v) => v.name === 'Samantha') ??
+        en.find((v) => /female/i.test(v.name)) ??
         en.find((v) => v.name.includes('(f)') || v.name.includes('_f')) ??
-        en[0] ??                                          // first English voice as last resort
+        en[0] ??
         null
       )
     }
@@ -27,13 +35,82 @@ export default function Page() {
   const [messages, setMessages] = useState<Message[]>([])
   const [isThinking, setIsThinking] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [isNew, setIsNew] = useState(true)
+  const [isMuted, setIsMuted] = useState(false)
+
   const endTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isMutedRef = useRef(false)
+
+  // Hydrate from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed)
+          setIsNew(false)
+        }
+      } catch {}
+    }
+    const muted = localStorage.getItem(MUTED_KEY) === 'true'
+    setIsMuted(muted)
+    isMutedRef.current = muted
+  }, [])
+
+  // Persist messages whenever they change (skip during intro state)
+  useEffect(() => {
+    if (!isNew && messages.length > 0) {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(
+          messages.map(({ role, content, sentiment }) => ({ role, content, sentiment }))
+        )
+      )
+    }
+  }, [messages, isNew])
+
+  // Persist mute state
+  useEffect(() => {
+    isMutedRef.current = isMuted
+    localStorage.setItem(MUTED_KEY, String(isMuted))
+  }, [isMuted])
+
+  const playSound = useCallback((src: string) => {
+    if (isMutedRef.current) return
+    const audio = new Audio(src)
+    audio.play().catch(() => {})
+  }, [])
+
+  const clearConversation = () => {
+    if (window.confirm("Clear this conversation? This can't be undone.")) {
+      localStorage.removeItem(STORAGE_KEY)
+      setMessages([])
+      setIsNew(true)
+    }
+  }
 
   const sendMessage = useCallback(
     async (text: string) => {
-      const history = messages.map((m) => ({ role: m.role, content: m.content }))
-      setMessages((prev) => [...prev, { role: 'user', content: text }])
+      const wasNew = isNew
+
+      // Build history for the API — if first message, include the intro as assistant context
+      const historyBase: { role: 'user' | 'assistant'; content: string }[] = wasNew
+        ? [{ role: 'assistant', content: INTRO_MESSAGE.content }]
+        : []
+      const history = [
+        ...historyBase,
+        ...messages.map((m) => ({ role: m.role, content: m.content })),
+      ]
+
+      // Commit intro to the real message list on first send
+      setIsNew(false)
+      setMessages((prev) => {
+        const base = wasNew ? [INTRO_MESSAGE, ...prev] : prev
+        return [...base, { role: 'user', content: text }]
+      })
       setIsThinking(true)
+      playSound('/sounds/send.mp3')
 
       try {
         const res = await fetch('/api/chat', {
@@ -49,8 +126,8 @@ export default function Page() {
           ...prev,
           { role: 'assistant', content: data.response, sentiment: data.sentiment },
         ])
+        playSound('/sounds/receive.mp3')
 
-        // Speak using the browser's built-in speech engine (free, no API needed)
         if (data.response && typeof window !== 'undefined') {
           window.speechSynthesis.cancel()
           if (endTimerRef.current) clearTimeout(endTimerRef.current)
@@ -59,7 +136,6 @@ export default function Page() {
           const voice = await pickFemaleVoice()
           if (voice) utterance.voice = voice
 
-          // Estimate duration so the animation stops even if onend never fires (Safari bug)
           const words = data.response.trim().split(/\s+/).length
           const estimatedMs = Math.max(800, (words / 2.8) * 1000)
 
@@ -87,24 +163,58 @@ export default function Page() {
         setIsThinking(false)
       }
     },
-    [messages]
+    [messages, isNew, playSound]
   )
 
+  const displayMessages = isNew ? [INTRO_MESSAGE, ...messages] : messages
+
   return (
-    <main className="min-h-screen bg-purple-50 flex flex-col items-center">
-      <h1 className="text-2xl font-light tracking-[0.3em] text-purple-400 mt-10 mb-6 uppercase">
-        Mood
-      </h1>
+    <main className="flex flex-col h-dvh bg-purple-50 overflow-hidden">
+      {/* Sticky header: title + avatar */}
+      <header className="shrink-0 relative flex flex-col items-center pt-8 pb-2 px-4 bg-purple-50">
+        {/* Top-right controls */}
+        <div className="absolute top-4 right-4 flex items-center gap-3">
+          <button
+            onClick={() => setIsMuted((m) => !m)}
+            title={isMuted ? 'Unmute sound effects' : 'Mute sound effects'}
+            aria-label={isMuted ? 'Unmute sound effects' : 'Mute sound effects'}
+            className="text-purple-300 hover:text-purple-500 transition-colors"
+          >
+            {isMuted ? (
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <line x1="23" y1="9" x2="17" y2="15" />
+                <line x1="17" y1="9" x2="23" y2="15" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+              </svg>
+            )}
+          </button>
+          {!isNew && (
+            <button
+              onClick={clearConversation}
+              className="text-xs text-purple-300 hover:text-purple-500 transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
 
-      <Avatar isPlaying={isPlaying} />
-
-      <div className="h-7 flex items-center mt-1">
-        {isThinking && (
-          <span className="text-purple-300 text-sm animate-pulse">thinking...</span>
+        <h1 className="text-2xl font-light tracking-[0.3em] text-purple-400 uppercase mb-1">
+          Mood
+        </h1>
+        {isNew && (
+          <p className="text-purple-300 text-sm mb-2">An AI companion that listens</p>
         )}
-      </div>
 
-      <ChatBox messages={messages} onSend={sendMessage} isThinking={isThinking} />
+        <Avatar isPlaying={isPlaying} />
+      </header>
+
+      {/* Chat area fills remaining viewport */}
+      <ChatBox messages={displayMessages} onSend={sendMessage} isThinking={isThinking} />
     </main>
   )
 }

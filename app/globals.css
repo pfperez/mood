@@ -6,3 +6,40 @@ html,
 body {
   height: 100%;
 }
+
+/* ── Thinking dots ── */
+@keyframes bounce-dot {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.thinking-dot {
+  animation: bounce-dot 1.2s ease-in-out infinite;
+}
+.thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* ── Message slide-in animations ── */
+@keyframes slide-from-right {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slide-from-left {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.msg-enter-right {
+  animation: slide-from-right 200ms ease-out both;
+}
+
+.msg-enter-left {
+  animation: slide-from-left 200ms ease-out both;
+}

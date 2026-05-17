@@ -14,6 +14,18 @@ interface ChatBoxProps {
   isThinking: boolean
 }
 
+function ThinkingBubble() {
+  return (
+    <div className="flex justify-start msg-enter-left">
+      <div className="px-4 py-3 rounded-2xl rounded-bl-sm bg-white shadow-sm flex gap-1.5 items-center">
+        <span className="w-2 h-2 rounded-full bg-purple-300 thinking-dot" />
+        <span className="w-2 h-2 rounded-full bg-purple-300 thinking-dot" />
+        <span className="w-2 h-2 rounded-full bg-purple-300 thinking-dot" />
+      </div>
+    </div>
+  )
+}
+
 export default function ChatBox({ messages, onSend, isThinking }: ChatBoxProps) {
   const [input, setInput] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -37,16 +49,18 @@ export default function ChatBox({ messages, onSend, isThinking }: ChatBoxProps) 
   }
 
   return (
-    <div className="w-full max-w-md flex flex-col px-4 pb-8" style={{ flex: '1 1 auto' }}>
-      {/* Message list */}
-      <div className="overflow-y-auto space-y-3 py-2 max-h-72 min-h-[8rem]">
-        {messages.length === 0 && (
-          <p className="text-center text-purple-300 text-sm mt-8">
-            Say hello — I&apos;m here to listen.
-          </p>
-        )}
+    <div className="flex flex-col flex-1 min-h-0 w-full max-w-md mx-auto px-4">
+      {/* Scrollable message list */}
+      <div className="flex-1 overflow-y-auto py-2 space-y-3">
         {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <div
+            key={i}
+            className={`flex ${
+              msg.role === 'user'
+                ? 'justify-end msg-enter-right'
+                : 'justify-start msg-enter-left'
+            }`}
+          >
             <div
               className={`px-4 py-2.5 rounded-2xl max-w-[78%] text-sm leading-relaxed ${
                 msg.role === 'user'
@@ -58,11 +72,12 @@ export default function ChatBox({ messages, onSend, isThinking }: ChatBoxProps) 
             </div>
           </div>
         ))}
+        {isThinking && <ThinkingBubble />}
         <div ref={bottomRef} />
       </div>
 
-      {/* Input row */}
-      <div className="flex gap-2 mt-4">
+      {/* Input row — always anchored at the bottom */}
+      <div className="shrink-0 py-3 flex gap-2 bg-purple-50">
         <input
           type="text"
           value={input}
@@ -70,7 +85,7 @@ export default function ChatBox({ messages, onSend, isThinking }: ChatBoxProps) 
           onKeyDown={onKeyDown}
           placeholder="How are you feeling?"
           disabled={isThinking}
-          className="flex-1 px-4 py-2.5 rounded-full border border-purple-200 bg-white text-gray-700 placeholder-gray-400 text-sm focus:outline-none focus:border-purple-400 disabled:opacity-50 transition-colors"
+          className="flex-1 px-4 py-2.5 rounded-full border border-purple-200 bg-white text-gray-700 placeholder-gray-400 text-base focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-transparent disabled:opacity-50 transition-colors"
         />
         <button
           onClick={submit}
