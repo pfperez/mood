@@ -7,7 +7,6 @@ import Sidebar, { Conversation } from '@/components/Sidebar'
 
 const CONVERSATIONS_KEY = 'mood-conversations'
 const ACTIVE_KEY = 'mood-active-conversation'
-const MUTED_KEY = 'mood-muted'
 
 const INTRO_MESSAGE: Message = {
   role: 'assistant',
@@ -27,11 +26,8 @@ export default function Page() {
   const [activeId, setActiveId] = useState('')
   const [isThinking, setIsThinking] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [isMuted, setIsMuted] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [hydrated, setHydrated] = useState(false)
-
-  const isMutedRef = useRef(false)
 
   // Derived state
   const activeConversation = conversations.find((c) => c.id === activeId)
@@ -63,11 +59,6 @@ export default function Page() {
 
     setConversations(convs)
     setActiveId(aid)
-
-    const muted = localStorage.getItem(MUTED_KEY) === 'true'
-    setIsMuted(muted)
-    isMutedRef.current = muted
-
     setHydrated(true)
   }, [])
 
@@ -90,18 +81,6 @@ export default function Page() {
     if (!hydrated || !activeId) return
     localStorage.setItem(ACTIVE_KEY, activeId)
   }, [activeId, hydrated])
-
-  // Persist mute state
-  useEffect(() => {
-    isMutedRef.current = isMuted
-    localStorage.setItem(MUTED_KEY, String(isMuted))
-  }, [isMuted])
-
-  const playSound = useCallback((src: string) => {
-    if (isMutedRef.current) return
-    const audio = new Audio(src)
-    audio.play().catch(() => {})
-  }, [])
 
   // Conversation management
   const handleCreate = useCallback(() => {
@@ -209,7 +188,6 @@ export default function Page() {
         )
       )
       setIsThinking(true)
-      playSound('/sounds/send.mp3')
 
       try {
         const res = await fetch('/api/chat', {
@@ -235,7 +213,6 @@ export default function Page() {
               : c
           )
         )
-        playSound('/sounds/receive.mp3')
         speakResponse(data.response)
       } catch (err) {
         console.error(err)
@@ -257,7 +234,7 @@ export default function Page() {
         setIsThinking(false)
       }
     },
-    [conversations, activeId, playSound, speakResponse]
+    [conversations, activeId, speakResponse]
   )
 
   const displayMessages = isNew ? [INTRO_MESSAGE] : messages
@@ -304,25 +281,6 @@ export default function Page() {
 
           {/* Top-right controls */}
           <div className="absolute top-4 right-4 flex items-center gap-3">
-            <button
-              onClick={() => setIsMuted((m) => !m)}
-              title={isMuted ? 'Unmute sound effects' : 'Mute sound effects'}
-              aria-label={isMuted ? 'Unmute sound effects' : 'Mute sound effects'}
-              className="text-purple-300 hover:text-purple-500 transition-colors"
-            >
-              {isMuted ? (
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                  <line x1="23" y1="9" x2="17" y2="15" />
-                  <line x1="17" y1="9" x2="23" y2="15" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-                </svg>
-              )}
-            </button>
             {!isNew && (
               <button
                 onClick={clearConversation}
