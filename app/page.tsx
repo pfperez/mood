@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import Avatar from '@/components/Avatar'
 import ChatBox, { Message } from '@/components/ChatBox'
 import Sidebar, { Conversation } from '@/components/Sidebar'
